@@ -11,7 +11,7 @@
 
 using namespace dae;
 
-//#define TRIANGLE_STRIP
+#define TRIANGLE_STRIP
 
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow)
@@ -166,26 +166,9 @@ void Renderer::Render()
 
 #endif // TRIANGLE_STRIP
 
-	std::vector<Vertex> ndcVertices{};
-
-	VertexTransformationFunction(meshes_world[0].vertices, ndcVertices);
 
 	std::vector<Vertex> rasterVertices{};
-
-	rasterVertices.reserve(ndcVertices.size());
-
-	for (Vertex vertex : ndcVertices)
-	{
-
-		vertex.position = m_Camera.invViewMatrix.TransformPoint(vertex.position);
-
-		vertex.position.x = (vertex.position.x + 1) * 0.5f * m_Width;
-		vertex.position.y = (1.0f - vertex.position.y) * 0.5f * m_Height;
-
-		rasterVertices.emplace_back(vertex);
-	}
-
-
+	VertexTransformationFunction(meshes_world[0].vertices, rasterVertices);
 
 
 	//RENDER LOGIC
@@ -214,9 +197,6 @@ void Renderer::Render()
 	{
 		int index0{ i }, index1{ i + 1 }, index2{ i + 2 };
 #endif // TRIANGLE_STRIP
-
-
-
 
 		const Vector2 v0{
 			rasterVertices[meshIndeces[index0]].position.x,
@@ -274,22 +254,27 @@ void Renderer::Render()
 
 
 
-				float zInterpolated1{ 1 / (rasterVertices[meshIndeces[index0]].position.z ) * weightV0 };
-				float zInterpolated2{ 1 / (rasterVertices[meshIndeces[index1]].position.z ) * weightV1 };
-				float zInterpolated3{ 1 / (rasterVertices[meshIndeces[index2]].position.z ) * weightV2 };
+				float depth0{ rasterVertices[meshIndeces[index0]].position.z };
+				float depth1{ rasterVertices[meshIndeces[index1]].position.z };
+				float depth2{ rasterVertices[meshIndeces[index2]].position.z };
 
-				float zInterpolatedWeight{ 1 / (zInterpolated1 + zInterpolated2 + zInterpolated3) };
+
+				float zInterpolatedWeight{ 1 / (
+						weightV0 / depth0 +
+						weightV1 / depth1 +
+						weightV2 / depth2
+					) };
 
 				if (m_pDepthBufferPixels[pixelIndex] < zInterpolatedWeight) continue;
 
 				m_pDepthBufferPixels[pixelIndex] = zInterpolatedWeight;
 
 
-				Vector2 uvInterpolated1{ weightV0 * (rasterVertices[meshIndeces[index0]].uv / rasterVertices[meshIndeces[i]].position.z) };
-				Vector2 uvInterpolated2{ weightV1 * (rasterVertices[meshIndeces[index1]].uv / rasterVertices[meshIndeces[i + 1]].position.z) };
-				Vector2 uvInterpolated3{ weightV2 * (rasterVertices[meshIndeces[index2]].uv / rasterVertices[meshIndeces[i + 2]].position.z) };
+				Vector2 uvInterpolated0{ weightV0 * (rasterVertices[meshIndeces[index0]].uv / depth0) };
+				Vector2 uvInterpolated1{ weightV1 * (rasterVertices[meshIndeces[index1]].uv / depth1) };
+				Vector2 uvInterpolated2{ weightV2 * (rasterVertices[meshIndeces[index2]].uv / depth2) };
 
-				Vector2 uvInterpolate{ (uvInterpolated1 + uvInterpolated2 + uvInterpolated3) * zInterpolatedWeight };
+				Vector2 uvInterpolate{ (uvInterpolated0 + uvInterpolated1 + uvInterpolated2) * zInterpolatedWeight };
 
 				ColorRGB finalColor{
 					m_pTexture->Sample(uvInterpolate)
@@ -315,8 +300,8 @@ void Renderer::Render()
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>&vertices_in, std::vector<Vertex>&vertices_out) const
 {
-	vertices_out.reserve(vertices_in.size());
-
+	std::vector<Vertex> ndcVertices{};
+	ndcVertices.reserve(ndcVertices.size());
 	for (Vertex vertex : vertices_in)
 	{
 
@@ -325,8 +310,21 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>&vertices_i
 		vertex.position.x = vertex.position.x / (m_AspectRatio * m_Camera.fov) / vertex.position.z;
 		vertex.position.y = vertex.position.y / m_Camera.fov / vertex.position.z;
 
+		ndcVertices.emplace_back(vertex);
+	}
+
+
+	vertices_out.reserve(ndcVertices.size());
+
+	for (Vertex vertex : ndcVertices)
+	{
+
+		vertex.position.x = (vertex.position.x + 1) * 0.5f * m_Width;
+		vertex.position.y = (1.0f - vertex.position.y) * 0.5f * m_Height;
+
 		vertices_out.emplace_back(vertex);
 	}
+
 }
 
 bool Renderer::SaveBufferToImage() const
