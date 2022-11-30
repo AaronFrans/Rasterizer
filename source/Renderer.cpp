@@ -167,7 +167,7 @@ void Renderer::Render()
 #endif // TRIANGLE_STRIP
 
 
-	std::vector<Vertex> rasterVertices{};
+	std::vector<Vertex_Out> rasterVertices{};
 	VertexTransformationFunction(meshes_world[0].vertices, rasterVertices);
 
 
@@ -298,25 +298,32 @@ void Renderer::Render()
 }
 
 
-void Renderer::VertexTransformationFunction(const std::vector<Vertex>&vertices_in, std::vector<Vertex>&vertices_out) const
+void Renderer::VertexTransformationFunction(const std::vector<Vertex>&vertices_in, std::vector<Vertex_Out>&vertices_out) const
 {
-	std::vector<Vertex> ndcVertices{};
+	std::vector<Vertex_Out> ndcVertices{};
 	ndcVertices.reserve(ndcVertices.size());
+	Matrix projectionMatrix{
+		Vector3{1 / (m_AspectRatio * m_Camera.fov), 0, 0},
+		Vector3{0, 1 / m_Camera.fov, 0},
+		Vector3{0,0,1},
+		Vector3{0,0,0}
+	};
+
 	for (Vertex vertex : vertices_in)
 	{
-
+		Vector4 postition;
 		vertex.position = m_Camera.invViewMatrix.TransformPoint(vertex.position);
 
-		vertex.position.x = vertex.position.x / (m_AspectRatio * m_Camera.fov) / vertex.position.z;
-		vertex.position.y = vertex.position.y / m_Camera.fov / vertex.position.z;
-
-		ndcVertices.emplace_back(vertex);
+		postition.x = vertex.position.x / (m_AspectRatio * m_Camera.fov) / vertex.position.z;
+		postition.y = vertex.position.y / m_Camera.fov / vertex.position.z;
+		postition.z = vertex.position.z;
+		ndcVertices.emplace_back(Vertex_Out{ postition,vertex.color, vertex.uv, vertex.normal, vertex.normal });
 	}
 
 
 	vertices_out.reserve(ndcVertices.size());
 
-	for (Vertex vertex : ndcVertices)
+	for (Vertex_Out vertex : ndcVertices)
 	{
 
 		vertex.position.x = (vertex.position.x + 1) * 0.5f * m_Width;

@@ -23,6 +23,10 @@ namespace dae
 		float fovAngle{ 90.f };
 		float fov{ tanf((fovAngle * TO_RADIANS) / 2.f) };
 
+
+		const float near{ 0.01f };
+		const float far{ 100 };
+
 		Vector3 forward{ Vector3::UnitZ };
 		Vector3 up{ Vector3::UnitY };
 		Vector3 right{ Vector3::UnitX };
@@ -34,9 +38,9 @@ namespace dae
 		Matrix viewMatrix{};
 
 
-		float moveSpeed{ 7 };
-		float mouseMoveSpeed{ 2 };
-		float rotationSpeed{ 5 * TO_RADIANS };
+		const float moveSpeed{ 7 };
+		const float mouseMoveSpeed{ 2 };
+		const float rotationSpeed{ 5 * TO_RADIANS };
 
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = { 0.f,0.f,0.f })
 		{
