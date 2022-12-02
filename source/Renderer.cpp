@@ -51,8 +51,8 @@ void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
 
-	//const float meshRotationPerSecond{ 50.0f };
-	//m_Mesh.worldMatrix = Matrix::CreateRotationY(meshRotationPerSecond * pTimer->GetElapsed() * TO_RADIANS) * m_Mesh.worldMatrix;
+	const float meshRotationPerSecond{ 50.0f };
+	m_Mesh.worldMatrix = Matrix::CreateRotationY(meshRotationPerSecond * pTimer->GetElapsed() * TO_RADIANS) * m_Mesh.worldMatrix;
 }
 
 void Renderer::Render()
@@ -138,6 +138,7 @@ void Renderer::VertexTransformationFunction()
 		Vertex_Out vertexOut{ {}, vertex.color, vertex.uv, vertex.normal, vertex.normal };
 		vertexOut.position = worldViewProjectionMatrix.TransformPoint({ vertex.position, 1.0f });
 
+		vertexOut.normal = m_Mesh.worldMatrix.TransformVector(vertex.normal).Normalized();
 		vertexOut.position.x /= vertexOut.position.w;
 		vertexOut.position.y /= vertexOut.position.w;
 		vertexOut.position.z /= vertexOut.position.w;
@@ -224,28 +225,46 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 			case dae::Renderer::RenderMode::Texture:
 			{
 
-				const float wWeight0{ m_Mesh.vertices_out[m_Mesh.indices[i0]].position.w };
-				const float wWeight1{ m_Mesh.vertices_out[m_Mesh.indices[i1]].position.w };
-				const float wWeight2{ m_Mesh.vertices_out[m_Mesh.indices[i2]].position.w };
+				Vertex_Out& v0 = m_Mesh.vertices_out[m_Mesh.indices[i0]];
+				Vertex_Out& v1 = m_Mesh.vertices_out[m_Mesh.indices[i1]];
+				Vertex_Out& v2 = m_Mesh.vertices_out[m_Mesh.indices[i2]];
 
+				Vertex_Out interpolatedVertex{};
+
+				// uv
 				const float interpolatedWDepth
 				{
-					1.0f /
-						(weightV0 / wWeight0 +
-						weightV1 / wWeight1 +
-						weightV2 / wWeight2)
+					1.0f / (
+						weightV0 / v0.position.w +
+						weightV1 / v1.position.w +
+						weightV2 / v2.position.w
+						)
 				};
 
-				Vector2 uvInterpolated0{ weightV0 * (m_Mesh.vertices_out[m_Mesh.indices[i0]].uv / wWeight0) };
-				Vector2 uvInterpolated1{ weightV1 * (m_Mesh.vertices_out[m_Mesh.indices[i1]].uv / wWeight1) };
-				Vector2 uvInterpolated2{ weightV2 * (m_Mesh.vertices_out[m_Mesh.indices[i2]].uv / wWeight2) };
+				Vector2 uvInterpolated0{ weightV0 * (v0.uv / v0.position.w) };
+				Vector2 uvInterpolated1{ weightV1 * (v1.uv / v1.position.w) };
+				Vector2 uvInterpolated2{ weightV2 * (v2.uv / v2.position.w) };
+
+				interpolatedVertex.uv = { (uvInterpolated0 + uvInterpolated1 + uvInterpolated2) * interpolatedWDepth };
+
+				// position
+
+				Vector4 positionInterpolated0 = Vector4{ weightV0 * (v0.position / v0.position.w) };
+				Vector4 positionInterpolated1 = Vector4{ weightV1 * (v1.position / v1.position.w) };
+				Vector4 positionInterpolated2 = Vector4{ weightV2 * (v2.position / v2.position.w) };
+
+				interpolatedVertex.position = { (positionInterpolated0 + positionInterpolated1 + positionInterpolated2) * interpolatedWDepth };
 
 
-				Vector2 uvInterpolated{ (uvInterpolated0 + uvInterpolated1 + uvInterpolated2) * interpolatedWDepth };
+				//color
+				interpolatedVertex.color = v0.color * weightV0 + v1.color * weightV1 + v2.color * weightV2;
 
-				ColorRGB finalColor{
-					m_pTexture->Sample(uvInterpolated)
-				};
+				//normal
+				interpolatedVertex.normal = (v0.normal * weightV0 + v1.normal * weightV1 + v2.normal * weightV2).Normalized();
+
+				interpolatedVertex.tangent = (v0.tangent * weightV0 + v1.tangent * weightV1 + v2.tangent * weightV2).Normalized();
+
+				ColorRGB finalColor = PixelShading(interpolatedVertex);
 
 				finalColor.MaxToOne();
 
@@ -254,6 +273,8 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 					static_cast<uint8_t>(finalColor.g * 255),
 					static_cast<uint8_t>(finalColor.b * 255));
 			}
+			break;
+
 			break;
 			case dae::Renderer::RenderMode::Depth:
 			{
@@ -319,7 +340,8 @@ void dae::Renderer::InitMesh()
 Vertex{
 	{3.f,-3.f,-2.f},
 	{1},
-	{1,1}}
+	{1,1}
+}
 },
 {
 	3,0,4,1,5,2,
@@ -371,7 +393,8 @@ PrimitiveTopology::TriangleStrip
 Vertex{
 	{3.f,-3.f,-2.f},
 	{1},
-	{1,1}}
+	{1,1}
+}
 },
 {
 	3,0,1,	1,4,3,	4,1,2,
@@ -387,11 +410,42 @@ PrimitiveTopology::TriangleList
 	const Vector3 rotation{ };
 	const Vector3 scale{ Vector3{ 0.5f, 0.5f, 0.5f } };
 	m_Mesh.worldMatrix = Matrix::CreateScale(scale) * Matrix::CreateRotation(rotation) * Matrix::CreateTranslation(position);
-	}
+}
 
 bool dae::Renderer::PositionOutsideFrustrum(const Vector4& v)
 {
 	return v.x < -1.0f || v.x > 1.0f || v.y < -1.0f || v.y > 1.0f;;
+}
+
+ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
+{
+	Vector3 lightDirection = { .577f, -.577f, .577f };
+
+	const float observedArea{ Vector3::Dot(v.normal, lightDirection.Normalized()) };
+
+	switch (m_CurrentColorMode)
+	{
+	case dae::Renderer::ColorMode::ObservedArea:
+		return ColorRGB{ observedArea, observedArea ,observedArea };
+		break;
+	case dae::Renderer::ColorMode::Diffuse:
+		return { 1,1,1 };
+		break;
+	case dae::Renderer::ColorMode::Specular:
+		return { 1,1,1 };
+		break;
+	case dae::Renderer::ColorMode::FinalColor:
+		return	m_pTexture->Sample(v.uv);
+		break;
+	}
+
+
+
+
+
+
+
+
 }
 
 bool Renderer::SaveBufferToImage() const
@@ -399,7 +453,12 @@ bool Renderer::SaveBufferToImage() const
 	return SDL_SaveBMP(m_pBackBuffer, "Rasterizer_ColorBuffer.bmp");
 }
 
-void dae::Renderer::ToggleRenderState()
+void dae::Renderer::ToggleRenderMode()
 {
 	m_CurrentRenderMode = static_cast<RenderMode>((static_cast<int>(m_CurrentRenderMode) + 1) % (static_cast<int>(RenderMode::Depth) + 1));
+}
+
+void dae::Renderer::ToggleColorMode()
+{
+	m_CurrentColorMode = static_cast<ColorMode>((static_cast<int>(m_CurrentColorMode) + 1) % (static_cast<int>(ColorMode::FinalColor) + 1));
 }

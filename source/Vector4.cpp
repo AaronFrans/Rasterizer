@@ -11,6 +11,8 @@ namespace dae
 	Vector4::Vector4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
 	Vector4::Vector4(const Vector3& v, float _w) : x(v.x), y(v.y), z(v.z), w(_w) {}
 
+	Vector4::Vector4(const Vector4& v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
+
 	float Vector4::Magnitude() const
 	{
 		return sqrtf(x * x + y * y + z * z + w * w);
@@ -54,6 +56,10 @@ namespace dae
 	}
 
 #pragma region Operator Overloads
+	Vector4 Vector4::operator/(float scale) const
+	{
+		return { x / scale, y / scale, z / scale, w / scale };
+	}
 	Vector4 Vector4::operator*(float scale) const
 	{
 		return { x * scale, y * scale, z * scale, w * scale };

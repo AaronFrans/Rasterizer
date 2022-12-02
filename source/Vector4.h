@@ -14,6 +14,7 @@ namespace dae
 		Vector4() = default;
 		Vector4(float _x, float _y, float _z, float _w);
 		Vector4(const Vector3& v, float _w);
+		Vector4(const Vector4& v);
 
 		float Magnitude() const;
 		float SqrMagnitude() const;
@@ -26,6 +27,7 @@ namespace dae
 		static float Dot(const Vector4& v1, const Vector4& v2);
 
 		// operator overloading
+		Vector4 operator/(float scale) const;
 		Vector4 operator*(float scale) const;
 		Vector4 operator+(const Vector4& v) const;
 		Vector4 operator-(const Vector4& v) const;

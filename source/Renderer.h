@@ -22,7 +22,14 @@ namespace dae
 		enum class RenderMode
 		{
 			Texture,
-			Depth
+			Depth,
+		};
+		enum class ColorMode
+		{
+			ObservedArea,
+			Diffuse,
+			Specular,
+			FinalColor,
 		};
 
 	public:
@@ -40,7 +47,8 @@ namespace dae
 
 		bool SaveBufferToImage() const;
 
-		void ToggleRenderState();
+		void ToggleRenderMode();
+		void ToggleColorMode();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -61,6 +69,7 @@ namespace dae
 		int m_Height{};
 
 		RenderMode m_CurrentRenderMode;
+		ColorMode m_CurrentColorMode;
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(); //W1 Version
@@ -68,6 +77,8 @@ namespace dae
 		void RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& screenVertices);
 		void InitMesh();
 		bool PositionOutsideFrustrum(const Vector4& v);
+
+		ColorRGB PixelShading(const Vertex_Out& v);
 
 	};
 }
