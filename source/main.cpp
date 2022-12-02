@@ -63,6 +63,10 @@ int main(int argc, char* args[])
 			case SDL_KEYUP:
 				if (e.key.keysym.scancode == SDL_SCANCODE_X)
 					takeScreenshot = true;
+
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F3)
+					pRenderer->ToggleRenderState();
+
 				break;
 			}
 		}

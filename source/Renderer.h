@@ -19,6 +19,12 @@ namespace dae
 
 	class Renderer final
 	{
+		enum class RenderMode
+		{
+			Texture,
+			Depth
+		};
+
 	public:
 		Renderer(SDL_Window* pWindow);
 		~Renderer();
@@ -34,6 +40,8 @@ namespace dae
 
 		bool SaveBufferToImage() const;
 
+		void ToggleRenderState();
+
 	private:
 		SDL_Window* m_pWindow{};
 
@@ -47,11 +55,19 @@ namespace dae
 
 		Camera m_Camera{};
 
+		Mesh m_Mesh{};
+
 		int m_Width{};
 		int m_Height{};
-		float m_AspectRatio{};
+
+		RenderMode m_CurrentRenderMode;
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
-		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex_Out>& vertices_out) const; //W1 Version
+		void VertexTransformationFunction(); //W1 Version
+
+		void RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& screenVertices);
+		void InitMesh();
+		bool PositionOutsideFrustrum(const Vector4& v);
+
 	};
 }

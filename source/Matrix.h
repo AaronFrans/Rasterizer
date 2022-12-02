@@ -48,7 +48,7 @@ namespace dae {
 		static Matrix Transpose(const Matrix& m);
 		static Matrix Inverse(const Matrix& m);
 
-		static Matrix CreateLookAtLH(const Vector3& origin, const Vector3& forward, const Vector3& up);
+		static Matrix CreateLookAtLH(const Vector3& origin, const Vector3& forward, const Vector3& worldUp);
 		static Matrix CreatePerspectiveFovLH(float fovy, float aspect, float zn, float zf);
 
 		Vector4& operator[](int index);

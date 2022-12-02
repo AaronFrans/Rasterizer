@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <algorithm>
 
 namespace dae
 {
@@ -55,5 +56,13 @@ namespace dae
 		if (v < 0.f) return 0.f;
 		if (v > 1.f) return 1.f;
 		return v;
+	}
+
+
+	inline float Remap(float val, float min, float max)
+	{
+
+		const float clamped{ std::clamp(val, min, max) };
+		return (clamped - min) / (max - min);
 	}
 }

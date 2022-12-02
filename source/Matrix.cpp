@@ -142,18 +142,31 @@ namespace dae {
 		return out;
 	}
 
-	Matrix Matrix::CreateLookAtLH(const Vector3& origin, const Vector3& forward, const Vector3& up)
+	Matrix Matrix::CreateLookAtLH(const Vector3& origin, const Vector3& forward, const Vector3& worldUp)
 	{
 		//TODO W1
+		Vector3 right = Vector3::Cross(worldUp, forward).Normalized();
+		Vector3 up = Vector3::Cross(forward, right);
 
-		return {};
+
+		return {
+			right,
+			up,
+			forward,
+			origin
+		};
 	}
 
 	Matrix Matrix::CreatePerspectiveFovLH(float fov, float aspect, float zn, float zf)
 	{
 		//TODO W2
-
-		return {};
+		float frustrunDepth{ zf - zn };
+		return {
+			{1 / (fov * aspect), 0, 0, 0},
+			{0, 1 / fov, 0, 0},
+			{0, 0, zf / frustrunDepth, 1},
+			{0, 0,  - (zf * zn) / frustrunDepth, 0}
+		};
 	}
 
 	Vector3 Matrix::GetAxisX() const
