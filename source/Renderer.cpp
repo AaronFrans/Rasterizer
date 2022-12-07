@@ -30,11 +30,9 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,.0f,-10.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(45.f, { .0f,.0f, 0.f }, static_cast<float>(m_Width) / m_Height);
 
-	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
-
-	m_CurrentRenderMode = RenderMode::Depth;
+	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
 
 
 	InitMesh();
@@ -44,7 +42,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
-	delete m_pTexture;
+	delete m_pDiffuseTexture;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -138,7 +136,7 @@ void Renderer::VertexTransformationFunction()
 		Vertex_Out vertexOut{ {}, vertex.color, vertex.uv, vertex.normal, vertex.normal };
 		vertexOut.position = worldViewProjectionMatrix.TransformPoint({ vertex.position, 1.0f });
 
-		vertexOut.normal = m_Mesh.worldMatrix.TransformVector(vertex.normal).Normalized();
+		vertexOut.normal = m_Mesh.worldMatrix.TransformVector(vertex.normal);
 		vertexOut.position.x /= vertexOut.position.w;
 		vertexOut.position.y /= vertexOut.position.w;
 		vertexOut.position.z /= vertexOut.position.w;
@@ -231,8 +229,7 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 
 				Vertex_Out interpolatedVertex{};
 
-				// uv
-				const float interpolatedWDepth
+				const float interpolatedWWeight
 				{
 					1.0f / (
 						weightV0 / v0.position.w +
@@ -241,27 +238,27 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 						)
 				};
 
+				// uv
+
+
 				Vector2 uvInterpolated0{ weightV0 * (v0.uv / v0.position.w) };
 				Vector2 uvInterpolated1{ weightV1 * (v1.uv / v1.position.w) };
 				Vector2 uvInterpolated2{ weightV2 * (v2.uv / v2.position.w) };
 
-				interpolatedVertex.uv = { (uvInterpolated0 + uvInterpolated1 + uvInterpolated2) * interpolatedWDepth };
-
-				// position
-
-				Vector4 positionInterpolated0 = Vector4{ weightV0 * (v0.position / v0.position.w) };
-				Vector4 positionInterpolated1 = Vector4{ weightV1 * (v1.position / v1.position.w) };
-				Vector4 positionInterpolated2 = Vector4{ weightV2 * (v2.position / v2.position.w) };
-
-				interpolatedVertex.position = { (positionInterpolated0 + positionInterpolated1 + positionInterpolated2) * interpolatedWDepth };
+				interpolatedVertex.uv = { (uvInterpolated0 + uvInterpolated1 + uvInterpolated2) * interpolatedWWeight };
 
 
 				//color
 				interpolatedVertex.color = v0.color * weightV0 + v1.color * weightV1 + v2.color * weightV2;
 
 				//normal
-				interpolatedVertex.normal = (v0.normal * weightV0 + v1.normal * weightV1 + v2.normal * weightV2).Normalized();
+				Vector3 normalInterpolated0{ weightV0 * (v0.normal / v0.position.w) };
+				Vector3 normalInterpolated1{ weightV1 * (v1.normal / v1.position.w) };
+				Vector3 normalInterpolated2{ weightV2 * (v2.normal / v2.position.w) };
 
+				interpolatedVertex.normal = { ((normalInterpolated0 + normalInterpolated1 + normalInterpolated2) * interpolatedWWeight).Normalized() };
+
+				//tangent
 				interpolatedVertex.tangent = (v0.tangent * weightV0 + v1.tangent * weightV1 + v2.tangent * weightV2).Normalized();
 
 				ColorRGB finalColor = PixelShading(interpolatedVertex);
@@ -278,7 +275,7 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 			break;
 			case dae::Renderer::RenderMode::Depth:
 			{
-				float depthVal = Remap(interpolatedZDepth, 0.985f, 1.0f);
+				float depthVal = Remap(interpolatedZDepth, 0.997f, 1.0f);
 
 				ColorRGB finalColor{ depthVal, depthVal, depthVal };
 
@@ -351,7 +348,7 @@ Vertex{
 PrimitiveTopology::TriangleStrip
 	};
 #elif defined(OBJ)
-	Utils::ParseOBJ("Resources/tuktuk.obj", m_Mesh.vertices, m_Mesh.indices);
+	Utils::ParseOBJ("Resources/vehicle.obj", m_Mesh.vertices, m_Mesh.indices);
 #else
 	m_Mesh = Mesh
 	{
@@ -406,27 +403,30 @@ PrimitiveTopology::TriangleList
 
 #endif // TRIANGLE_STRIP
 
-	const Vector3 position{ m_Camera.origin + Vector3{ 0.0f, -3.0f, 15.0f } };
+	const Vector3 position{ m_Camera.origin + Vector3{ 0, 0, 50 } };
 	const Vector3 rotation{ };
-	const Vector3 scale{ Vector3{ 0.5f, 0.5f, 0.5f } };
+	const Vector3 scale{ Vector3{ 1, 1, 1 } };
 	m_Mesh.worldMatrix = Matrix::CreateScale(scale) * Matrix::CreateRotation(rotation) * Matrix::CreateTranslation(position);
 }
 
 bool dae::Renderer::PositionOutsideFrustrum(const Vector4& v)
 {
 	return v.x < -1.0f || v.x > 1.0f || v.y < -1.0f || v.y > 1.0f;;
-}
+	}
 
 ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
 {
 	Vector3 lightDirection = { .577f, -.577f, .577f };
 
-	const float observedArea{ Vector3::Dot(v.normal, lightDirection.Normalized()) };
+	const float observedArea{ std::max(Vector3::Dot(v.normal, -lightDirection.Normalized()), 0.f) };
+	const float lightIntensity{ 7.0f };
+
+	ColorRGB finalColor{};
 
 	switch (m_CurrentColorMode)
 	{
 	case dae::Renderer::ColorMode::ObservedArea:
-		return ColorRGB{ observedArea, observedArea ,observedArea };
+		return finalColor + ColorRGB{ observedArea, observedArea, observedArea };
 		break;
 	case dae::Renderer::ColorMode::Diffuse:
 		return { 1,1,1 };
@@ -435,17 +435,15 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
 		return { 1,1,1 };
 		break;
 	case dae::Renderer::ColorMode::FinalColor:
-		return	m_pTexture->Sample(v.uv);
-		break;
+	{
+		const ColorRGB lambert{ 1.0f * m_pDiffuseTexture->Sample(v.uv) / PI };
+
+		return	finalColor + lambert * observedArea * lightIntensity;
 	}
-
-
-
-
-
-
-
-
+		break;
+	default:
+		return { 1,1,1 };
+	}
 }
 
 bool Renderer::SaveBufferToImage() const

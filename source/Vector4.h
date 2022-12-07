@@ -35,4 +35,9 @@ namespace dae
 		float& operator[](int index);
 		float operator[](int index) const;
 	};
+
+	inline Vector4 operator*(float scale, const Vector4& v)
+	{
+		return { v.x * scale, v.y * scale, v.z * scale, v.w * scale };
+	}
 }

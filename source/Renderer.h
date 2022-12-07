@@ -59,7 +59,7 @@ namespace dae
 
 		float* m_pDepthBufferPixels{};
 
-		Texture* m_pTexture{ nullptr };
+		Texture* m_pDiffuseTexture{ nullptr };
 
 		Camera m_Camera{};
 

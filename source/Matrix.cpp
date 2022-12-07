@@ -148,13 +148,7 @@ namespace dae {
 		Vector3 right = Vector3::Cross(worldUp, forward).Normalized();
 		Vector3 up = Vector3::Cross(forward, right);
 
-
-		return {
-			right,
-			up,
-			forward,
-			origin
-		};
+		return{};
 	}
 
 	Matrix Matrix::CreatePerspectiveFovLH(float fov, float aspect, float zn, float zf)

@@ -70,7 +70,13 @@ namespace dae
 			right = Vector3::Cross(Vector3::UnitY, forward).Normalized();
 			up = Vector3::Cross(forward, right);
 
-			invViewMatrix = Matrix::CreateLookAtLH(origin, forward, Vector3::UnitY);
+
+			invViewMatrix = {
+					right,
+					up,
+					forward,
+					origin
+			};
 			//Inverse(ONB) => ViewMatrix
 			viewMatrix = invViewMatrix.Inverse();
 
