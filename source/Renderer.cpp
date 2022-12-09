@@ -32,7 +32,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	//Initialize Camera
 	m_Camera.Initialize(45.f, { .0f,.0f, 0.f }, static_cast<float>(m_Width) / m_Height);
 
-	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pDiffuseMap = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pNormalMap = Texture::LoadFromFile("Resources/vehicle_normal.png");
+	m_pGlossMap = Texture::LoadFromFile("Resources/vehicle_gloss.png");
+	m_pSpecularMap = Texture::LoadFromFile("Resources/vehicle_specular.png");
 
 
 	InitMesh();
@@ -42,15 +45,22 @@ Renderer::Renderer(SDL_Window* pWindow) :
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
-	delete m_pDiffuseTexture;
+	delete m_pDiffuseMap;
+	delete m_pNormalMap;
+	delete m_pGlossMap;
+	delete m_pSpecularMap;
 }
 
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
 
-	const float meshRotationPerSecond{ 50.0f };
-	m_Mesh.worldMatrix = Matrix::CreateRotationY(meshRotationPerSecond * pTimer->GetElapsed() * TO_RADIANS) * m_Mesh.worldMatrix;
+	if (m_IsRotating)
+	{
+		const float meshRotationPerSecond{ 50.0f };
+		m_Mesh.worldMatrix = Matrix::CreateRotationY(meshRotationPerSecond * pTimer->GetElapsed() * TO_RADIANS) * m_Mesh.worldMatrix;
+	}
+	
 }
 
 void Renderer::Render()
@@ -136,7 +146,13 @@ void Renderer::VertexTransformationFunction()
 		Vertex_Out vertexOut{ {}, vertex.color, vertex.uv, vertex.normal, vertex.normal };
 		vertexOut.position = worldViewProjectionMatrix.TransformPoint({ vertex.position, 1.0f });
 
+
+		vertexOut.viewDirection = Vector3{ vertexOut.position.x, vertexOut.position.y, vertexOut.position.z }.Normalized();
+
 		vertexOut.normal = m_Mesh.worldMatrix.TransformVector(vertex.normal);
+		vertexOut.tangent = m_Mesh.worldMatrix.TransformVector(vertex.tangent);
+
+
 		vertexOut.position.x /= vertexOut.position.w;
 		vertexOut.position.y /= vertexOut.position.w;
 		vertexOut.position.z /= vertexOut.position.w;
@@ -223,9 +239,9 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 			case dae::Renderer::RenderMode::Texture:
 			{
 
-				Vertex_Out& v0 = m_Mesh.vertices_out[m_Mesh.indices[i0]];
-				Vertex_Out& v1 = m_Mesh.vertices_out[m_Mesh.indices[i1]];
-				Vertex_Out& v2 = m_Mesh.vertices_out[m_Mesh.indices[i2]];
+				const Vertex_Out& v0 = m_Mesh.vertices_out[m_Mesh.indices[i0]];
+				const Vertex_Out& v1 = m_Mesh.vertices_out[m_Mesh.indices[i1]];
+				const Vertex_Out& v2 = m_Mesh.vertices_out[m_Mesh.indices[i2]];
 
 				Vertex_Out interpolatedVertex{};
 
@@ -256,10 +272,36 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 				Vector3 normalInterpolated1{ weightV1 * (v1.normal / v1.position.w) };
 				Vector3 normalInterpolated2{ weightV2 * (v2.normal / v2.position.w) };
 
-				interpolatedVertex.normal = { ((normalInterpolated0 + normalInterpolated1 + normalInterpolated2) * interpolatedWWeight).Normalized() };
+				interpolatedVertex.normal = {
+					(
+					(normalInterpolated0 + normalInterpolated1 + normalInterpolated2)
+					* interpolatedWWeight
+					).Normalized() };
 
 				//tangent
-				interpolatedVertex.tangent = (v0.tangent * weightV0 + v1.tangent * weightV1 + v2.tangent * weightV2).Normalized();
+				Vector3 tangentInterpolated0{ weightV0 * (v0.tangent / v0.position.w) };
+				Vector3 tangentInterpolated1{ weightV1 * (v1.tangent / v1.position.w) };
+				Vector3 tangentInterpolated2{ weightV2 * (v2.tangent / v2.position.w) };
+
+				interpolatedVertex.tangent = {
+					(
+					(tangentInterpolated0 + tangentInterpolated1 + tangentInterpolated2)
+					* interpolatedWWeight
+					).Normalized() };;
+
+
+
+				//viewDir
+				Vector3 viewDirInterpolated0{ weightV0 * (v0.viewDirection / v0.position.w) };
+				Vector3 viewDirInterpolated1{ weightV1 * (v1.viewDirection / v1.position.w) };
+				Vector3 viewDirInterpolated2{ weightV2 * (v2.viewDirection / v2.position.w) };
+
+				interpolatedVertex.viewDirection = {
+					(
+					(viewDirInterpolated0 + viewDirInterpolated1 + viewDirInterpolated2)
+					* interpolatedWWeight
+					).Normalized() };;
+
 
 				ColorRGB finalColor = PixelShading(interpolatedVertex);
 
@@ -294,7 +336,100 @@ void Renderer::RenderTraingle(int i0, int i1, int i2, std::vector<Vector2>& scre
 	}
 }
 
-void dae::Renderer::InitMesh()
+
+bool Renderer::PositionOutsideFrustrum(const Vector4& v)
+{
+	return v.x < -1.0f || v.x > 1.0f || v.y < -1.0f || v.y > 1.0f;;
+}
+
+ColorRGB Renderer::PixelShading(const Vertex_Out& v)
+{
+
+	Vector3 pixelNormal{ v.normal };
+
+
+	if (m_UseNormalMap)
+	{
+		Vector3 binormal = Vector3::Cross(v.normal, v.tangent);
+
+		Matrix tangentSpaceAxis = Matrix{ v.tangent, binormal, v.normal, Vector3::Zero };
+
+		ColorRGB currentNormalMap{ 2.0f * m_pNormalMap->Sample(v.uv) - ColorRGB{ 1.0f, 1.0f, 1.0f } };
+
+		Vector3 normalMapSample{ currentNormalMap.r, currentNormalMap.g, currentNormalMap.b };
+
+		pixelNormal = tangentSpaceAxis.TransformVector(normalMapSample).Normalized();
+	}
+
+	Vector3 lightDirection = Vector3{ .577f, -.577f, .577f }.Normalized();
+
+	const float observedArea{ std::max(Vector3::Dot(pixelNormal, -lightDirection), 0.f) };
+	const float lightIntensity{ 7.0f };
+	const float glossyness{ 25.0f };
+
+
+	switch (m_CurrentColorMode)
+	{
+	case dae::Renderer::ColorMode::ObservedArea:
+		return ColorRGB{ observedArea, observedArea, observedArea };
+		break;
+	case dae::Renderer::ColorMode::Diffuse:
+	{
+
+		const ColorRGB lambert{ 1.0f * m_pDiffuseMap->Sample(v.uv) / PI };
+
+		return (lightIntensity * lambert) * observedArea;
+	}
+	break;
+	case dae::Renderer::ColorMode::Specular:
+	{
+		const float phongExponent{ m_pGlossMap->Sample(v.uv).r * glossyness };
+
+		return m_pSpecularMap->Sample(v.uv) * BRDF_Utils::Phong(1.0f, phongExponent, -lightDirection, v.viewDirection, pixelNormal);
+	}
+	break;
+	case dae::Renderer::ColorMode::FinalColor:
+	{
+		const ColorRGB lambert{ 1.0f * m_pDiffuseMap->Sample(v.uv) / PI };
+
+		const float phongExponent{ m_pGlossMap->Sample(v.uv).r * glossyness };
+
+		const ColorRGB specular{ m_pSpecularMap->Sample(v.uv) * BRDF_Utils::Phong(1.0f, phongExponent, -lightDirection, v.viewDirection, pixelNormal) };
+
+		return (lightIntensity * lambert + specular) * observedArea;
+	}
+	break;
+	default:
+		return { 1,1,1 };
+	}
+}
+
+bool Renderer::SaveBufferToImage() const
+{
+	return SDL_SaveBMP(m_pBackBuffer, "Rasterizer_ColorBuffer.bmp");
+}
+
+void Renderer::ToggleRenderMode()
+{
+	m_CurrentRenderMode = static_cast<RenderMode>((static_cast<int>(m_CurrentRenderMode) + 1) % (static_cast<int>(RenderMode::Depth) + 1));
+}
+
+void Renderer::ToggleColorMode()
+{
+	m_CurrentColorMode = static_cast<ColorMode>((static_cast<int>(m_CurrentColorMode) + 1) % (static_cast<int>(ColorMode::FinalColor) + 1));
+}
+
+void Renderer::ToggleNormals()
+{
+	m_UseNormalMap = !m_UseNormalMap;
+}
+
+void Renderer::ToggleRotation()
+{
+	m_IsRotating = !m_IsRotating;
+}
+
+void Renderer::InitMesh()
 {
 
 #ifdef TRIANGLE_STRIP
@@ -346,7 +481,7 @@ Vertex{
 	6,3,7,4,8,5
 },
 PrimitiveTopology::TriangleStrip
-	};
+};
 #elif defined(OBJ)
 	Utils::ParseOBJ("Resources/vehicle.obj", m_Mesh.vertices, m_Mesh.indices);
 #else
@@ -407,56 +542,4 @@ PrimitiveTopology::TriangleList
 	const Vector3 rotation{ };
 	const Vector3 scale{ Vector3{ 1, 1, 1 } };
 	m_Mesh.worldMatrix = Matrix::CreateScale(scale) * Matrix::CreateRotation(rotation) * Matrix::CreateTranslation(position);
-}
-
-bool dae::Renderer::PositionOutsideFrustrum(const Vector4& v)
-{
-	return v.x < -1.0f || v.x > 1.0f || v.y < -1.0f || v.y > 1.0f;;
-	}
-
-ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
-{
-	Vector3 lightDirection = { .577f, -.577f, .577f };
-
-	const float observedArea{ std::max(Vector3::Dot(v.normal, -lightDirection.Normalized()), 0.f) };
-	const float lightIntensity{ 7.0f };
-
-	ColorRGB finalColor{};
-
-	switch (m_CurrentColorMode)
-	{
-	case dae::Renderer::ColorMode::ObservedArea:
-		return finalColor + ColorRGB{ observedArea, observedArea, observedArea };
-		break;
-	case dae::Renderer::ColorMode::Diffuse:
-		return { 1,1,1 };
-		break;
-	case dae::Renderer::ColorMode::Specular:
-		return { 1,1,1 };
-		break;
-	case dae::Renderer::ColorMode::FinalColor:
-	{
-		const ColorRGB lambert{ 1.0f * m_pDiffuseTexture->Sample(v.uv) / PI };
-
-		return	finalColor + lambert * observedArea * lightIntensity;
-	}
-		break;
-	default:
-		return { 1,1,1 };
-	}
-}
-
-bool Renderer::SaveBufferToImage() const
-{
-	return SDL_SaveBMP(m_pBackBuffer, "Rasterizer_ColorBuffer.bmp");
-}
-
-void dae::Renderer::ToggleRenderMode()
-{
-	m_CurrentRenderMode = static_cast<RenderMode>((static_cast<int>(m_CurrentRenderMode) + 1) % (static_cast<int>(RenderMode::Depth) + 1));
-}
-
-void dae::Renderer::ToggleColorMode()
-{
-	m_CurrentColorMode = static_cast<ColorMode>((static_cast<int>(m_CurrentColorMode) + 1) % (static_cast<int>(ColorMode::FinalColor) + 1));
 }

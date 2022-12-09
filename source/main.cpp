@@ -1,5 +1,5 @@
 //External includes
-//#include "vld.h"
+#include "vld.h"
 #include "SDL.h"
 #include "SDL_surface.h"
 #undef main
@@ -65,7 +65,11 @@ int main(int argc, char* args[])
 					takeScreenshot = true;
 				else if (e.key.keysym.scancode == SDL_SCANCODE_F3)
 					pRenderer->ToggleRenderMode();
-				else if (e.key.keysym.scancode == SDL_SCANCODE_F1)
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F6)
+					pRenderer->ToggleNormals();
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F5)
+					pRenderer->ToggleRotation();
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F7)
 					pRenderer->ToggleColorMode();
 
 				break;

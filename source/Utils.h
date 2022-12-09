@@ -173,4 +173,16 @@ namespace dae
 		}
 #pragma warning(pop)
 	}
+
+	namespace BRDF_Utils
+	{
+		inline ColorRGB Phong(float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
+		{
+			const Vector3 reflectedLightVector{ Vector3::Reflect(l,n) };
+			const float reflectedViewDot{ std::max(Vector3::Dot(reflectedLightVector, v), 0.f) };
+			const float phong{ ks * powf(reflectedViewDot, exp) };
+
+			return ColorRGB{ phong, phong, phong };
+		}
+	}
 }

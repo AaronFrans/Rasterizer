@@ -49,6 +49,8 @@ namespace dae
 
 		void ToggleRenderMode();
 		void ToggleColorMode();
+		void ToggleNormals();
+		void ToggleRotation();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -59,7 +61,10 @@ namespace dae
 
 		float* m_pDepthBufferPixels{};
 
-		Texture* m_pDiffuseTexture{ nullptr };
+		Texture* m_pDiffuseMap{ nullptr };
+		Texture* m_pNormalMap{ nullptr };
+		Texture* m_pSpecularMap{ nullptr };
+		Texture* m_pGlossMap{ nullptr };
 
 		Camera m_Camera{};
 
@@ -67,6 +72,9 @@ namespace dae
 
 		int m_Width{};
 		int m_Height{};
+
+		bool m_UseNormalMap{ true };
+		bool m_IsRotating{ true };
 
 		RenderMode m_CurrentRenderMode;
 		ColorMode m_CurrentColorMode;
